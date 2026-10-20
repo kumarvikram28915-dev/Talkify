@@ -1,0 +1,399 @@
+name: Build Talkify APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Complete Talkify App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.x'
+          channel: 'stable'
+
+      - name: Build Talkify Project
+        run: |
+          flutter create --org com.talkify --project-name talkify talkify_app
+          cat << 'EOF' > talkify_app/lib/main.dart
+          import 'package:flutter/material.dart';
+
+          void main() => runApp(const TalkifyApp());
+
+          class TalkifyApp extends StatefulWidget {
+            const TalkifyApp({super.key});
+            @override
+            State<TalkifyApp> createState() => _TalkifyAppState();
+          }
+
+          class _TalkifyAppState extends State<TalkifyApp> {
+            bool _isDark = true;
+            String _lang = 'en';
+
+            void toggleTheme() => setState(() => _isDark = !_isDark);
+            void setLang(String l) => setState(() => _lang = l);
+
+            String tr(String key) {
+              final dict = {
+                'en': {
+                  'feed': 'Feed', 'reels': 'Reels', 'chats': 'Chats', 'settings': 'Settings',
+                  'admin': 'Admin Panel', 'private_warn': 'This account is private and does not follow you back. Messaging and calls are disabled.',
+                  'profile': 'Profile', 'search': 'Search', 'mute': 'Mute', 'theme': 'Chat Theme',
+                  'disappearing': 'Disappearing Messages', 'block': 'Block User', 'report': 'Report User',
+                  'shared_media': 'Media', 'shared_files': 'Files', 'shared_links': 'Links'
+                },
+                'hi': {
+                  'feed': 'फ़ीड', 'reels': 'रील्स', 'chats': 'चैट्स', 'settings': 'सेटिंग्स',
+                  'admin': 'व्यवस्थापक पैनल', 'private_warn': 'यह खाता निजी है और आपको फ़ॉलो नहीं करता। चैट और कॉल अक्षम हैं।',
+                  'profile': 'प्रोफ़ाइल', 'search': 'खोजें', 'mute': 'म्यूट करें', 'theme': 'चैट थीम',
+                  'disappearing': 'गायब होने वाले संदेश', 'block': 'ब्लॉक करें', 'report': 'रिपोर्ट करें',
+                  'shared_media': 'मीडिया', 'shared_files': 'फ़ाइलें', 'shared_links': 'लिंक्स'
+                },
+                'es': {
+                  'feed': 'Inicio', 'reels': 'Reels', 'chats': 'Mensajes', 'settings': 'Ajustes',
+                  'admin': 'Panel Admin', 'private_warn': 'Cuenta privada y no te sigue. Mensajes y llamadas desactivados.',
+                  'profile': 'Perfil', 'search': 'Buscar', 'mute': 'Silenciar', 'theme': 'Tema',
+                  'disappearing': 'Mensajes temporales', 'block': 'Bloquear', 'report': 'Reportar',
+                  'shared_media': 'Archivos', 'shared_files': 'Documentos', 'shared_links': 'Enlaces'
+                }
+              };
+              return dict[_lang]?[key] ?? dict['en']?[key] ?? key;
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                title: 'Talkify',
+                debugShowCheckedModeBanner: false,
+                themeMode: _isDark ? ThemeMode.dark : ThemeMode.light,
+                theme: ThemeData(brightness: Brightness.light, scaffoldBackgroundColor: Colors.white, primaryColor: const Color(0xFF3897F0)),
+                darkTheme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: const Color(0xFF121212), primaryColor: const Color(0xFF3897F0)),
+                home: HomeScreen(isDark: _isDark, onToggleTheme: toggleTheme, lang: _lang, onSetLang: setLang, tr: tr),
+              );
+            }
+          }
+
+          class HomeScreen extends StatefulWidget {
+            final bool isDark;
+            final VoidCallback onToggleTheme;
+            final String lang;
+            final Function(String) onSetLang;
+            final String Function(String) tr;
+            const HomeScreen({super.key, required this.isDark, required this.onToggleTheme, required this.lang, required this.onSetLang, required this.tr});
+
+            @override
+            State<HomeScreen> createState() => _HomeScreenState();
+          }
+
+          class _HomeScreenState extends State<HomeScreen> {
+            int _tab = 0;
+
+            @override
+            Widget build(BuildContext context) {
+              final pages = [
+                FeedTab(tr: widget.tr),
+                ReelsTab(tr: widget.tr),
+                ChatsTab(tr: widget.tr),
+                SettingsTab(isDark: widget.isDark, onToggleTheme: widget.onToggleTheme, lang: widget.lang, onSetLang: widget.onSetLang, tr: widget.tr),
+              ];
+
+              return Scaffold(
+                appBar: _tab == 1 ? null : AppBar(
+                  title: const Text('Talkify', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, letterSpacing: 1.2)),
+                  actions: [
+                    if (_tab == 0) IconButton(icon: const Icon(Icons.send_outlined), onPressed: () => setState(() => _tab = 2)),
+                  ],
+                ),
+                body: pages[_tab],
+                bottomNavigationBar: BottomNavigationBar(
+                  currentIndex: _tab,
+                  onTap: (i) => setState(() => _tab = i),
+                  type: BottomNavigationBarType.fixed,
+                  selectedItemColor: const Color(0xFF3897F0),
+                  unselectedItemColor: Colors.grey,
+                  items: [
+                    BottomNavigationBarItem(icon: const Icon(Icons.home_filled), label: widget.tr('feed')),
+                    BottomNavigationBarItem(icon: const Icon(Icons.video_library_outlined), label: widget.tr('reels')),
+                    BottomNavigationBarItem(icon: const Icon(Icons.chat_bubble_outline), label: widget.tr('chats')),
+                    BottomNavigationBarItem(icon: const Icon(Icons.settings_outlined), label: widget.tr('settings')),
+                  ],
+                ),
+              );
+            }
+          }
+
+          class FeedTab extends StatelessWidget {
+            final String Function(String) tr;
+            const FeedTab({super.key, required this.tr});
+
+            @override
+            Widget build(BuildContext context) {
+              return ListView(
+                children: [
+                  _post(username: 'talkify_official', isVerified: true, caption: 'Welcome to Talkify! 🚀 Pure Flutter & Firebase Architecture.', likes: '2,840', color: Colors.blueAccent),
+                  _post(username: 'priya_creative', isVerified: true, caption: 'Golden hour in Mumbai 🌅📸 #vibes #talkify', likes: '1,120', color: Colors.purpleAccent),
+                  _post(username: 'private_voyager', isVerified: false, caption: 'Private account demo. Follow to unlock chats & calls! 🔒', likes: '45', color: Colors.teal),
+                ],
+              );
+            }
+
+            Widget _post({required String username, required bool isVerified, required String caption, required String likes, required Color color}) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListTile(
+                    leading: CircleAvatar(backgroundColor: color, child: Text(username[0].toUpperCase(), style: const TextStyle(color: Colors.white))),
+                    title: Row(
+                      children: [
+                        Text(username, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        if (isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, color: Colors.blue, size: 16)),
+                      ],
+                    ),
+                    trailing: const Icon(Icons.more_vert),
+                  ),
+                  Container(
+                    height: 300,
+                    width: double.infinity,
+                    color: color.withOpacity(0.3),
+                    child: Center(child: Icon(Icons.photo_library_rounded, size: 80, color: color)),
+                  ),
+                  Row(
+                    children: [
+                      IconButton(icon: const Icon(Icons.favorite_border), onPressed: () {}),
+                      IconButton(icon: const Icon(Icons.chat_bubble_outline), onPressed: () {}),
+                      IconButton(icon: const Icon(Icons.share_outlined), onPressed: () {}),
+                      const Spacer(),
+                      IconButton(icon: const Icon(Icons.bookmark_border), onPressed: () {}),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('$likes likes', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text('$username  $caption'),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
+          }
+
+          class ReelsTab extends StatelessWidget {
+            final String Function(String) tr;
+            const ReelsTab({super.key, required this.tr});
+
+            @override
+            Widget build(BuildContext context) {
+              return PageView.builder(
+                scrollDirection: Axis.vertical,
+                itemCount: 4,
+                itemBuilder: (ctx, i) {
+                  final colors = [Colors.black87, Colors.deepPurple.shade900, Colors.blueGrey.shade900, Colors.teal.shade900];
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Container(
+                        color: colors[i],
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.play_circle_fill, size: 80, color: Colors.white54),
+                              const SizedBox(height: 12),
+                              Text('Talkify Reel #${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                              const Text('Original Audio • Trending', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 16,
+                        bottom: 40,
+                        child: Column(
+                          children: [
+                            IconButton(icon: const Icon(Icons.favorite, color: Colors.white, size: 30), onPressed: () {}),
+                            const Text('14.2k', style: TextStyle(color: Colors.white, fontSize: 12)),
+                            const SizedBox(height: 16),
+                            IconButton(icon: const Icon(Icons.repeat, color: Colors.white, size: 30), onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Re-posted to your feed successfully! 🔁')));
+                            }),
+                            const Text('512', style: TextStyle(color: Colors.white, fontSize: 12)),
+                            const SizedBox(height: 16),
+                            IconButton(icon: const Icon(Icons.download, color: Colors.white, size: 30), onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reel saved to phone gallery! 📥')));
+                            }),
+                            const SizedBox(height: 16),
+                            IconButton(icon: const Icon(Icons.bookmark_border, color: Colors.white, size: 30), onPressed: () {}),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            }
+          }
+
+          class ChatsTab extends StatelessWidget {
+            final String Function(String) tr;
+            const ChatsTab({super.key, required this.tr});
+
+            @override
+            Widget build(BuildContext context) {
+              return ListView(
+                children: [
+                  ListTile(
+                    leading: const CircleAvatar(backgroundColor: Colors.blueAccent, child: Text('T', style: TextStyle(color: Colors.white))),
+                    title: const Row(
+                      children: [
+                        Text('talkify_official', style: TextStyle(fontWeight: FontWeight.bold)),
+                        SizedBox(width: 4),
+                        Icon(Icons.verified, color: Colors.blue, size: 16),
+                      ],
+                    ),
+                    subtitle: const Text('Hello! Try out our new Instagram details menu!'),
+                    trailing: const Text('Now', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(username: 'talkify_official', isPrivate: false, isVerified: true, tr: tr))),
+                  ),
+                  ListTile(
+                    leading: const CircleAvatar(backgroundColor: Colors.redAccent, child: Text('P', style: TextStyle(color: Colors.white))),
+                    title: const Text('private_voyager', style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text('🔒 Private Account (Interaction Safeguard)'),
+                    trailing: const Icon(Icons.lock, size: 16, color: Colors.grey),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(username: 'private_voyager', isPrivate: true, isVerified: false, tr: tr))),
+                  ),
+                ],
+              );
+            }
+          }
+
+          class ChatScreen extends StatefulWidget {
+            final String username;
+            final bool isPrivate;
+            final bool isVerified;
+            final String Function(String) tr;
+            const ChatScreen({super.key, required this.username, required this.isPrivate, required this.isVerified, required this.tr});
+
+            @override
+            State<ChatScreen> createState() => _ChatScreenState();
+          }
+
+          class _ChatScreenState extends State<ChatScreen> {
+            final List<String> _msgs = ['Hi! Welcome to Talkify messaging.', 'Tap my name at the top to open Chat Details!'];
+            final TextEditingController _ctrl = TextEditingController();
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(
+                  titleSpacing: 0,
+                  title: GestureDetector(
+                    onTap: () => _openDetailsSheet(context),
+                    child: Row(
+                      children: [
+                        CircleAvatar(radius: 16, child: Text(widget.username[0].toUpperCase())),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(widget.username, style: const TextStyle(fontSize: 15)),
+                                if (widget.isVerified) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.verified, color: Colors.blue, size: 14)),
+                              ],
+                            ),
+                            const Text('Active now • Tap for details', style: TextStyle(color: Colors.green, fontSize: 10)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    IconButton(icon: const Icon(Icons.call), onPressed: () => _callAction(context, 'Audio Call')),
+                    IconButton(icon: const Icon(Icons.videocam), onPressed: () => _callAction(context, 'Video Call')),
+                  ],
+                ),
+                body: Column(
+                  children: [
+                    if (widget.isPrivate)
+                      Container(
+                        color: Colors.red.shade900,
+                        padding: const EdgeInsets.all(10),
+                        width: double.infinity,
+                        child: Text(widget.tr('private_warn'), style: const TextStyle(color: Colors.white, fontSize: 12), textAlign: TextAlign.center),
+                      ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: _msgs.length,
+                        itemBuilder: (ctx, i) => Align(
+                          alignment: i % 2 == 0 ? Alignment.centerLeft : Alignment.centerRight,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: i % 2 == 0 ? Colors.grey.withOpacity(0.2) : const Color(0xFF3897F0),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(_msgs[i], style: TextStyle(color: i % 2 == 0 ? null : Colors.white)),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _ctrl,
+                                enabled: !widget.isPrivate,
+                                decoration: InputDecoration(
+                                  hintText: widget.isPrivate ? 'Messaging disabled (Private Account)' : 'Message...',
+                                  filled: true,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.send, color: Color(0xFF3897F0)),
+                              onPressed: widget.isPrivate ? () {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(widget.tr('private_warn'))));
+                              } : () {
+                                if (_ctrl.text.isNotEmpty) {
+                                  setState(() => _msgs.add(_ctrl.text));
+                                  _ctrl.clear();
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            void _callAction(BuildContext context, String type) {
+              if (widget.isPrivate) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors
